@@ -11,7 +11,6 @@ namespace ThirdMonke
     public class Plugin : BaseUnityPlugin
     {
         public static bool ThirdPersonActive = false;
-        public static bool CameraSideFront = false; // false = Behind, true = Front
         public static float CameraDistance = 1.5f;
         public static float ShoulderOffset = 0.0f; // -1.0f (left) to 1.0f (right)
 
@@ -25,7 +24,7 @@ namespace ThirdMonke
                 var harmony = new Harmony("com.narezany.thirdmonke");
                 harmony.PatchAll(typeof(Plugin).Assembly);
 
-                Logger.LogInfo("Third Monke loaded successfully! Desktop GUI, Front Mode, Shoulder Offset, and Anti-Clip Collision active.");
+                Logger.LogInfo("Third Monke loaded successfully! Configured clean GUI, removed Front view, and added Discord link.");
             }
             catch (Exception ex)
             {
@@ -144,23 +143,10 @@ namespace ThirdMonke
                     Vector3 headPos = originalCamPos;
                     Quaternion headRot = originalCamRot;
 
-                    Vector3 targetPos;
-                    Quaternion targetRot;
-
-                    if (!CameraSideFront)
-                    {
-                        // Behind Mode: offset backward, to the side (shoulder offset), and slightly upward
-                        Vector3 offsetDir = -Vector3.forward * CameraDistance + Vector3.right * ShoulderOffset + Vector3.up * (CameraDistance * 0.15f);
-                        targetPos = headPos + headRot * offsetDir;
-                        targetRot = headRot;
-                    }
-                    else
-                    {
-                        // Front Mode: offset forward, to the side, and slightly upward, pointing back at player's head
-                        Vector3 offsetDir = Vector3.forward * CameraDistance - Vector3.right * ShoulderOffset + Vector3.up * (CameraDistance * 0.15f);
-                        targetPos = headPos + headRot * offsetDir;
-                        targetRot = Quaternion.LookRotation(headPos - targetPos, headRot * Vector3.up);
-                    }
+                    // Behind Mode: offset backward, to the side (shoulder offset), and slightly upward
+                    Vector3 offsetDir = -Vector3.forward * CameraDistance + Vector3.right * ShoulderOffset + Vector3.up * (CameraDistance * 0.15f);
+                    Vector3 targetPos = headPos + headRot * offsetDir;
+                    Quaternion targetRot = headRot;
 
                     // Anti-Clip Collision Detection (RaycastAll to ignore player's own visual body and cosmetics)
                     Vector3 rayDir = targetPos - headPos;
@@ -176,14 +162,12 @@ namespace ThirdMonke
 
                         foreach (var hit in hits)
                         {
-                            // Skip player's own root transform and rig visual components (otherwise camera snaps inside head)
                             if (hit.transform.IsChildOf(tagger.transform))
                                 continue;
 
                             if (tagger.offlineVRRig != null && hit.transform.IsChildOf(tagger.offlineVRRig.transform))
                                 continue;
 
-                            // Skip triggers
                             if (hit.collider.isTrigger)
                                 continue;
 
@@ -197,13 +181,7 @@ namespace ThirdMonke
 
                         if (hitObstacle)
                         {
-                            // Position camera 0.15m in front of the hit point
                             targetPos = closestObstacle.point - rayDir.normalized * 0.15f;
-                            
-                            if (CameraSideFront)
-                            {
-                                targetRot = Quaternion.LookRotation(headPos - targetPos, headRot * Vector3.up);
-                            }
                         }
                     }
 
@@ -267,8 +245,9 @@ namespace ThirdMonke
                 titleStyle = new GUIStyle();
                 titleStyle.fontSize = 15;
                 titleStyle.fontStyle = FontStyle.Bold;
-                titleStyle.normal.textColor = new Color(1.0f, 0.3f, 0.3f); // Reddish accent
+                titleStyle.normal.textColor = new Color(0.2f, 0.8f, 1.0f); // Vibrant Aqua Cyan
                 titleStyle.alignment = TextAnchor.MiddleCenter;
+                titleStyle.richText = true;
             }
             return titleStyle;
         }
@@ -282,6 +261,7 @@ namespace ThirdMonke
                 toggleStyle.fontStyle = FontStyle.Bold;
                 toggleStyle.normal.textColor = Color.white;
                 toggleStyle.onNormal.textColor = Color.green;
+                toggleStyle.richText = true;
             }
             return toggleStyle;
         }
@@ -293,6 +273,7 @@ namespace ThirdMonke
                 textStyle = new GUIStyle();
                 textStyle.fontSize = 12;
                 textStyle.normal.textColor = Color.white;
+                textStyle.richText = true;
             }
             return textStyle;
         }
@@ -305,50 +286,41 @@ namespace ThirdMonke
                 buttonStyle.fontSize = 11;
                 buttonStyle.fontStyle = FontStyle.Bold;
                 buttonStyle.normal.textColor = Color.white;
+                buttonStyle.richText = true;
             }
             return buttonStyle;
         }
 
         private void OnGUI()
         {
-            int winWidth = 330;
-            int winHeight = 240;
+            int winWidth = 320;
+            int winHeight = 210;
             Rect winRect = new Rect(20, Screen.height - winHeight - 20, winWidth, winHeight);
 
             // Draw window background
             GUI.Box(winRect, "", GetWindowStyle());
 
-            GUILayout.BeginArea(new Rect(winRect.x + 15, winRect.y + 15, winWidth - 30, winHeight - 30));
+            GUILayout.BeginArea(new Rect(winRect.x + 15, winRect.y + 12, winWidth - 30, winHeight - 24));
             
-            GUILayout.Label("<b>THIRD MONKE CONFIG</b>", GetTitleStyle());
-            GUILayout.Space(12);
+            GUILayout.Label("<b>THIRD MONKE</b> v1.0.0", GetTitleStyle());
+            GUILayout.Space(8);
 
             // Toggle Third Person
-            ThirdPersonActive = GUILayout.Toggle(ThirdPersonActive, " Enable Third Person Mode", GetToggleStyle());
-            GUILayout.Space(12);
+            ThirdPersonActive = GUILayout.Toggle(ThirdPersonActive, "  Enable Third Person Mode", GetToggleStyle());
+            GUILayout.Space(10);
 
             if (ThirdPersonActive)
             {
-                // Mode Selector
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("View Direction:", GetTextStyle(), GUILayout.Width(110));
-                if (GUILayout.Button(CameraSideFront ? "FRONT (Спереди)" : "BEHIND (Сзади)", GetButtonStyle(), GUILayout.Width(170)))
-                {
-                    CameraSideFront = !CameraSideFront;
-                }
-                GUILayout.EndHorizontal();
-                GUILayout.Space(12);
-
                 // Shoulder Offset Slider (Left / Right)
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"Shoulder Offset: {ShoulderOffset:F2}", GetTextStyle(), GUILayout.Width(130));
+                GUILayout.Label($"Shoulder Offset: <b>{ShoulderOffset:F2}</b>", GetTextStyle(), GUILayout.Width(130));
                 ShoulderOffset = GUILayout.HorizontalSlider(ShoulderOffset, -1.0f, 1.0f, GUILayout.Width(150));
                 GUILayout.EndHorizontal();
-                GUILayout.Space(12);
+                GUILayout.Space(8);
 
                 // Distance Slider
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"Distance: {CameraDistance:F2}m", GetTextStyle(), GUILayout.Width(130));
+                GUILayout.Label($"Distance: <b>{CameraDistance:F2}m</b>", GetTextStyle(), GUILayout.Width(130));
                 CameraDistance = GUILayout.HorizontalSlider(CameraDistance, 0.4f, 4.0f, GUILayout.Width(150));
                 GUILayout.EndHorizontal();
             }
@@ -356,6 +328,16 @@ namespace ThirdMonke
             {
                 GUILayout.Label("Enable Third Person Mode to configure settings.", GetTextStyle());
             }
+
+            GUILayout.Space(12);
+
+            // Discord Link Button (Discord Blurple Color)
+            GUI.backgroundColor = new Color(0.35f, 0.45f, 0.9f); // Discord Blurple
+            if (GUILayout.Button("<b>JOIN DISCORD SERVER</b>", GetButtonStyle(), GUILayout.Height(30)))
+            {
+                Application.OpenURL("https://discord.gg/2myJxynQtX");
+            }
+            GUI.backgroundColor = Color.white; // Restore
 
             GUILayout.EndArea();
         }
@@ -372,7 +354,6 @@ namespace ThirdMonke
             {
                 if (Plugin.ThirdPersonActive && (__instance.isOfflineVRRig || __instance.isMyPlayer))
                 {
-                    // Ensure local player mesh is fully rendered in third person
                     AccessTools.Field(typeof(VRRig), "IsInvisibleToLocalPlayer").SetValue(__instance, false);
 
                     if (__instance.headMesh != null)
@@ -387,7 +368,6 @@ namespace ThirdMonke
                         }
                     }
 
-                    // Enable only visual renderers, skipping debug physics shapes and active colliders
                     var renderers = __instance.GetComponentsInChildren<Renderer>(true);
                     foreach (var r in renderers)
                     {
