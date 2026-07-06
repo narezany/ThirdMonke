@@ -1,15 +1,8 @@
 # Third Monke
 
-A BepInEx plugin for **Gorilla Tag** that adds a client-side Third-Person view camera. 
+A BepInEx plugin for **Gorilla Tag** that adds a client-side Third-Person view camera, configurable via a desktop GUI overlay.
 
 It offsets your VR headset rendering viewpoint backward and upward, allowing you to play the game while viewing your own monkey from behind.
-
-## Controls
-
-All camera settings, toggles, and adjustments are configured purely through the **Desktop GUI** overlay:
-* Look at your PC monitor / game mirror window.
-* Click on the UI window labeled **"THIRD MONKE CONFIG"** at the bottom-left corner of the screen.
-* Check the toggle to enable/disable the camera, select options, adjust sliders, or click to join the Discord server.
 
 ## Features
 
