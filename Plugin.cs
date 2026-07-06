@@ -2,7 +2,6 @@ using BepInEx;
 using HarmonyLib;
 using System;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
 namespace ThirdMonke
@@ -15,9 +14,6 @@ namespace ThirdMonke
         public static float CameraDistance = 1.5f;
         public static float ShoulderOffset = 0.0f; // -1.0f (left) to 1.0f (right)
 
-        private bool lastPrimaryState = false;
-        private float lastDistanceLogTime = 0f;
-
         private GameObject leftDot;
         private GameObject rightDot;
         private static Material handDotMat;
@@ -29,7 +25,7 @@ namespace ThirdMonke
                 var harmony = new Harmony("com.narezany.thirdmonke");
                 harmony.PatchAll(typeof(Plugin).Assembly);
 
-                Logger.LogInfo("Third Monke loaded successfully! Clean GUI, hand dots, and fixed culling mask physics.");
+                Logger.LogInfo("Third Monke loaded successfully! Configured clean GUI, hand dots, and fixed culling mask physics.");
             }
             catch (Exception ex)
             {
@@ -54,82 +50,8 @@ namespace ThirdMonke
 
         private void Update()
         {
-            try
-            {
-                if (Keyboard.current != null)
-                {
-                    if (Keyboard.current.tKey.wasPressedThisFrame)
-                    {
-                        ThirdPersonActive = !ThirdPersonActive;
-                        UnityEngine.Debug.Log($"[ThirdMonke] Keyboard Toggle. Third Person Mode: {ThirdPersonActive}");
-                    }
-
-                    if (ThirdPersonActive)
-                    {
-                        if (Keyboard.current.upArrowKey.isPressed)
-                        {
-                            AdjustDistance(Time.deltaTime * 1.5f);
-                        }
-                        if (Keyboard.current.downArrowKey.isPressed)
-                        {
-                            AdjustDistance(-Time.deltaTime * 1.5f);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                UnityEngine.Debug.LogError($"[ThirdMonke] Keyboard Input Error: {ex}");
-            }
-
-            try
-            {
-                var leftDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
-                if (leftDevice.isValid)
-                {
-                    bool primaryPressed = false;
-                    leftDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out primaryPressed);
-
-                    if (primaryPressed && !lastPrimaryState)
-                    {
-                        ThirdPersonActive = !ThirdPersonActive;
-                        UnityEngine.Debug.Log($"[ThirdMonke] VR Controller Toggle. Third Person Mode: {ThirdPersonActive}");
-                    }
-                    lastPrimaryState = primaryPressed;
-                }
-
-                if (ThirdPersonActive)
-                {
-                    var rightDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
-                    if (rightDevice.isValid)
-                    {
-                        Vector2 thumbstick = Vector2.zero;
-                        rightDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primary2DAxis, out thumbstick);
-
-                        if (Mathf.Abs(thumbstick.y) > 0.15f)
-                        {
-                            AdjustDistance(-thumbstick.y * Time.deltaTime * 1.5f);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            // Update hand indicator dots position and visibility
+            // Update hand indicator dots position and visibility (Keyboard/Controller toggles removed as requested)
             UpdateDots();
-        }
-
-        private void AdjustDistance(float delta)
-        {
-            CameraDistance = Mathf.Clamp(CameraDistance + delta, 0.4f, 4.0f);
-            
-            if (Time.time - lastDistanceLogTime > 1.0f)
-            {
-                UnityEngine.Debug.Log($"[ThirdMonke] Camera Distance adjusted to: {CameraDistance:F2} meters");
-                lastDistanceLogTime = Time.time;
-            }
         }
 
         private void UpdateDots()
@@ -478,7 +400,6 @@ namespace ThirdMonke
                         foreach (var hr in headRends)
                         {
                             hr.enabled = true;
-                            // DO NOT change layer anymore, camera cullingMask handling resolves rendering safely
                         }
                     }
 
@@ -489,7 +410,6 @@ namespace ThirdMonke
                         if (Plugin.ShouldShowRenderer(r, __instance))
                         {
                             r.enabled = true;
-                            // DO NOT change layer anymore, camera cullingMask handling resolves rendering safely
                         }
                     }
                 }
