@@ -2,6 +2,8 @@ using BepInEx;
 using HarmonyLib;
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 
 namespace ThirdMonke
 {
@@ -9,7 +11,10 @@ namespace ThirdMonke
     public class Plugin : BaseUnityPlugin
     {
         public static bool ThirdPersonActive = false;
+        public static float CameraDistance = 1.5f; // Adjustable distance
         private bool lastPrimaryState = false;
+        private static bool loggedThirdPerson = false;
+        private float lastDistanceLogTime = 0f;
 
         private void Awake()
         {
@@ -18,12 +23,7 @@ namespace ThirdMonke
                 var harmony = new Harmony("com.narezany.thirdmonke");
                 harmony.PatchAll(typeof(Plugin).Assembly);
 
-                // Spawn our camera manager component
-                var go = new GameObject("ThirdMonke_Manager");
-                GameObject.DontDestroyOnLoad(go);
-                go.AddComponent<ThirdPersonCamera>();
-
-                Logger.LogInfo("Third Monke loaded successfully! Press 'T' or Left Controller Primary Button to toggle Third Person.");
+                Logger.LogInfo("Third Monke loaded successfully! Toggle: 'T' / Left Controller Primary. Distance: Up/Down Arrows / Right Controller Thumbstick.");
             }
             catch (Exception ex)
             {
@@ -31,18 +31,55 @@ namespace ThirdMonke
             }
         }
 
+        private void OnEnable()
+        {
+            RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+            RenderPipelineManager.endCameraRendering += OnEndCamera;
+        }
+
+        private void OnDisable()
+        {
+            RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+            RenderPipelineManager.endCameraRendering -= OnEndCamera;
+        }
+
         private void Update()
         {
-            // Keyboard toggle
-            if (Input.GetKeyDown(KeyCode.T))
-            {
-                ThirdPersonActive = !ThirdPersonActive;
-                UnityEngine.Debug.Log($"[ThirdMonke] Keyboard Toggle. Third Person Mode: {ThirdPersonActive}");
-            }
-
-            // VR Controller toggle (Left hand primary button - X)
+            // Keyboard toggle using the New Input System
             try
             {
+                if (Keyboard.current != null)
+                {
+                    if (Keyboard.current.tKey.wasPressedThisFrame)
+                    {
+                        ThirdPersonActive = !ThirdPersonActive;
+                        loggedThirdPerson = false;
+                        UnityEngine.Debug.Log($"[ThirdMonke] Keyboard Toggle. Third Person Mode: {ThirdPersonActive}");
+                    }
+
+                    // Keyboard distance adjustment
+                    if (ThirdPersonActive)
+                    {
+                        if (Keyboard.current.upArrowKey.isPressed)
+                        {
+                            AdjustDistance(Time.deltaTime * 1.5f);
+                        }
+                        if (Keyboard.current.downArrowKey.isPressed)
+                        {
+                            AdjustDistance(-Time.deltaTime * 1.5f);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[ThirdMonke] Keyboard Input Error: {ex}");
+            }
+
+            // VR Controller inputs
+            try
+            {
+                // Left controller: toggle mode (Primary button X)
                 var leftDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
                 if (leftDevice.isValid)
                 {
@@ -52,9 +89,27 @@ namespace ThirdMonke
                     if (primaryPressed && !lastPrimaryState)
                     {
                         ThirdPersonActive = !ThirdPersonActive;
+                        loggedThirdPerson = false;
                         UnityEngine.Debug.Log($"[ThirdMonke] VR Controller Toggle. Third Person Mode: {ThirdPersonActive}");
                     }
                     lastPrimaryState = primaryPressed;
+                }
+
+                // Right controller: adjust distance (Thumbstick Y-axis)
+                if (ThirdPersonActive)
+                {
+                    var rightDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
+                    if (rightDevice.isValid)
+                    {
+                        Vector2 thumbstick = Vector2.zero;
+                        rightDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primary2DAxis, out thumbstick);
+
+                        if (Mathf.Abs(thumbstick.y) > 0.15f)
+                        {
+                            // Push/pull camera distance based on thumbstick input
+                            AdjustDistance(-thumbstick.y * Time.deltaTime * 1.5f);
+                        }
+                    }
                 }
             }
             catch
@@ -62,29 +117,71 @@ namespace ThirdMonke
                 // Silence XR exceptions if running in non-VR test modes
             }
         }
-    }
 
-    public class ThirdPersonCamera : MonoBehaviour
-    {
-        void LateUpdate()
+        private void AdjustDistance(float delta)
         {
-            if (Plugin.ThirdPersonActive)
+            CameraDistance = Mathf.Clamp(CameraDistance + delta, 0.4f, 4.0f);
+            
+            // Log distance change at most once per second to prevent log flooding
+            if (Time.time - lastDistanceLogTime > 1.0f)
             {
-                try
+                UnityEngine.Debug.Log($"[ThirdMonke] Camera Distance adjusted to: {CameraDistance:F2} meters");
+                lastDistanceLogTime = Time.time;
+            }
+        }
+
+        private Vector3 originalCamPos;
+        private bool hasOriginalPos = false;
+
+        private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
+        {
+            if (!ThirdPersonActive) return;
+
+            try
+            {
+                var tagger = GorillaTagger.Instance;
+                if (tagger == null || tagger.mainCamera == null) return;
+
+                if (camera.gameObject == tagger.mainCamera)
                 {
-                    var tagger = GorillaTagger.Instance;
-                    if (tagger != null && tagger.mainCamera != null)
+                    if (!loggedThirdPerson)
                     {
-                        Transform cam = tagger.mainCamera.transform;
-                        // Move camera 1.7 meters backward and 0.3 meters upward relative to headset orientation
-                        Vector3 offset = -cam.forward * 1.7f + cam.up * 0.3f;
-                        cam.position += offset;
+                        UnityEngine.Debug.Log($"[ThirdMonke] OnBeginCamera caught main camera rendering! Offsetting.");
+                        loggedThirdPerson = true;
                     }
+
+                    originalCamPos = camera.transform.position;
+                    hasOriginalPos = true;
+
+                    // Offset camera based on current adjustable distance
+                    Vector3 offset = -camera.transform.forward * CameraDistance + camera.transform.up * (CameraDistance * 0.15f);
+                    camera.transform.position += offset;
                 }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[ThirdMonke] OnBeginCamera Error: {ex}");
+            }
+        }
+
+        private void OnEndCamera(ScriptableRenderContext context, Camera camera)
+        {
+            if (!ThirdPersonActive || !hasOriginalPos) return;
+
+            try
+            {
+                var tagger = GorillaTagger.Instance;
+                if (tagger == null || tagger.mainCamera == null) return;
+
+                if (camera.gameObject == tagger.mainCamera)
                 {
-                    UnityEngine.Debug.LogError($"[ThirdMonke] Camera Offset Error: {ex}");
+                    camera.transform.position = originalCamPos;
+                    hasOriginalPos = false;
                 }
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[ThirdMonke] OnEndCamera Error: {ex}");
             }
         }
     }

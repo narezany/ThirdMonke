@@ -6,8 +6,12 @@ It offsets your VR headset rendering viewpoint backward and upward relative to y
 
 ## Controls
 
-- **Keyboard**: Press the **`T`** key to toggle between first-person and third-person view.
-- **VR Controller**: Press the **Primary Button on the Left Controller** (Button **`X`** on Oculus controllers) to toggle the view.
+- **Toggle View (First/Third Person)**:
+  - **Keyboard**: Press the **`T`** key.
+  - **VR Controller**: Press the **Primary Button on the Left Controller** (Button **`X`** on Oculus controllers).
+- **Adjust Distance**:
+  - **Keyboard**: Use **Up Arrow** (closer) and **Down Arrow** (further).
+  - **VR Controller**: Push the **Right Controller Thumbstick** forward/backward (up/down).
 
 ## Features
 
