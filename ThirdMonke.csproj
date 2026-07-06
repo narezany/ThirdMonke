@@ -24,6 +24,18 @@
       <HintPath>/mnt/data/SteamLibrary/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>/mnt/data/SteamLibrary/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>/mnt/data/SteamLibrary/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>/mnt/data/SteamLibrary/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.XRModule">
       <HintPath>/mnt/data/SteamLibrary/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.XRModule.dll</HintPath>
       <Private>False</Private>
