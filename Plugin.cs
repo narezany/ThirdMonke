@@ -11,11 +11,16 @@ namespace ThirdMonke
     public class Plugin : BaseUnityPlugin
     {
         public static bool ThirdPersonActive = false;
+        public static bool ShowHandDots = false; // Toggle to show white hand indicator dots
         public static float CameraDistance = 1.5f;
         public static float ShoulderOffset = 0.0f; // -1.0f (left) to 1.0f (right)
 
         private bool lastPrimaryState = false;
         private float lastDistanceLogTime = 0f;
+
+        private GameObject leftDot;
+        private GameObject rightDot;
+        private static Material handDotMat;
 
         private void Awake()
         {
@@ -24,7 +29,7 @@ namespace ThirdMonke
                 var harmony = new Harmony("com.narezany.thirdmonke");
                 harmony.PatchAll(typeof(Plugin).Assembly);
 
-                Logger.LogInfo("Third Monke loaded successfully! Configured clean GUI, removed Front view, and added Discord link.");
+                Logger.LogInfo("Third Monke loaded successfully! Refined GUI, hand indicator dots, and mesh filter active.");
             }
             catch (Exception ex)
             {
@@ -42,6 +47,9 @@ namespace ThirdMonke
         {
             RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
             RenderPipelineManager.endCameraRendering -= OnEndCamera;
+
+            if (leftDot != null) Destroy(leftDot);
+            if (rightDot != null) Destroy(rightDot);
         }
 
         private void Update()
@@ -108,6 +116,9 @@ namespace ThirdMonke
             catch
             {
             }
+
+            // Update hand indicator dots position and visibility
+            UpdateDots();
         }
 
         private void AdjustDistance(float delta)
@@ -119,6 +130,70 @@ namespace ThirdMonke
                 UnityEngine.Debug.Log($"[ThirdMonke] Camera Distance adjusted to: {CameraDistance:F2} meters");
                 lastDistanceLogTime = Time.time;
             }
+        }
+
+        private void UpdateDots()
+        {
+            bool shouldBeActive = ThirdPersonActive && ShowHandDots;
+            
+            if (shouldBeActive)
+            {
+                try
+                {
+                    var tagger = GorillaTagger.Instance;
+                    if (tagger != null && tagger.leftHandTransform != null && tagger.rightHandTransform != null)
+                    {
+                        if (leftDot == null)
+                        {
+                            leftDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                            leftDot.name = "ThirdMonke_LeftHandDot";
+                            var col = leftDot.GetComponent<Collider>();
+                            if (col != null) Destroy(col);
+                            leftDot.GetComponent<Renderer>().material = GetHandDotMaterial();
+                            leftDot.transform.localScale = new Vector3(0.06f, 0.06f, 0.06f); // Small distinct dots
+                            GameObject.DontDestroyOnLoad(leftDot);
+                        }
+                        if (rightDot == null)
+                        {
+                            rightDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                            rightDot.name = "ThirdMonke_RightHandDot";
+                            var col = rightDot.GetComponent<Collider>();
+                            if (col != null) Destroy(col);
+                            rightDot.GetComponent<Renderer>().material = GetHandDotMaterial();
+                            rightDot.transform.localScale = new Vector3(0.06f, 0.06f, 0.06f);
+                            GameObject.DontDestroyOnLoad(rightDot);
+                        }
+
+                        leftDot.SetActive(true);
+                        rightDot.SetActive(true);
+                        leftDot.transform.position = tagger.leftHandTransform.position;
+                        rightDot.transform.position = tagger.rightHandTransform.position;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogError($"[ThirdMonke] UpdateDots Error: {ex}");
+                }
+            }
+            else
+            {
+                if (leftDot != null && leftDot.activeSelf) leftDot.SetActive(false);
+                if (rightDot != null && rightDot.activeSelf) rightDot.SetActive(false);
+            }
+        }
+
+        public static Material GetHandDotMaterial()
+        {
+            if (handDotMat == null)
+            {
+                // GUI/Text Shader is built-in and naturally draws geometry on top of everything (ZTest Always)
+                Shader shader = Shader.Find("GUI/Text Shader");
+                if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
+                
+                handDotMat = new Material(shader);
+                handDotMat.color = Color.white;
+            }
+            return handDotMat;
         }
 
         private Vector3 originalCamPos;
@@ -143,7 +218,7 @@ namespace ThirdMonke
                     Vector3 headPos = originalCamPos;
                     Quaternion headRot = originalCamRot;
 
-                    // Behind Mode: offset backward, to the side (shoulder offset), and slightly upward
+                    // Behind Mode: offset backward, to the side, and slightly upward
                     Vector3 offsetDir = -Vector3.forward * CameraDistance + Vector3.right * ShoulderOffset + Vector3.up * (CameraDistance * 0.15f);
                     Vector3 targetPos = headPos + headRot * offsetDir;
                     Quaternion targetRot = headRot;
@@ -229,7 +304,7 @@ namespace ThirdMonke
             if (windowStyle == null)
             {
                 Texture2D bg = new Texture2D(1, 1);
-                bg.SetPixel(0, 0, new Color(0.12f, 0.12f, 0.12f, 0.9f)); // Semi-transparent dark gray
+                bg.SetPixel(0, 0, new Color(0.12f, 0.12f, 0.12f, 0.9f));
                 bg.Apply();
 
                 windowStyle = new GUIStyle();
@@ -245,7 +320,7 @@ namespace ThirdMonke
                 titleStyle = new GUIStyle();
                 titleStyle.fontSize = 15;
                 titleStyle.fontStyle = FontStyle.Bold;
-                titleStyle.normal.textColor = new Color(0.2f, 0.8f, 1.0f); // Vibrant Aqua Cyan
+                titleStyle.normal.textColor = new Color(0.2f, 0.8f, 1.0f); // Aqua Cyan
                 titleStyle.alignment = TextAnchor.MiddleCenter;
                 titleStyle.richText = true;
             }
@@ -294,10 +369,9 @@ namespace ThirdMonke
         private void OnGUI()
         {
             int winWidth = 320;
-            int winHeight = 210;
+            int winHeight = 245; // Slightly taller for the new checkbox
             Rect winRect = new Rect(20, Screen.height - winHeight - 20, winWidth, winHeight);
 
-            // Draw window background
             GUI.Box(winRect, "", GetWindowStyle());
 
             GUILayout.BeginArea(new Rect(winRect.x + 15, winRect.y + 12, winWidth - 30, winHeight - 24));
@@ -307,11 +381,15 @@ namespace ThirdMonke
 
             // Toggle Third Person
             ThirdPersonActive = GUILayout.Toggle(ThirdPersonActive, "  Enable Third Person Mode", GetToggleStyle());
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
             if (ThirdPersonActive)
             {
-                // Shoulder Offset Slider (Left / Right)
+                // Hand Indicators Toggle
+                ShowHandDots = GUILayout.Toggle(ShowHandDots, "  Show Hand Indicators (Dots)", GetToggleStyle());
+                GUILayout.Space(8);
+
+                // Shoulder Offset Slider
                 GUILayout.BeginHorizontal();
                 GUILayout.Label($"Shoulder Offset: <b>{ShoulderOffset:F2}</b>", GetTextStyle(), GUILayout.Width(130));
                 ShoulderOffset = GUILayout.HorizontalSlider(ShoulderOffset, -1.0f, 1.0f, GUILayout.Width(150));
@@ -329,19 +407,50 @@ namespace ThirdMonke
                 GUILayout.Label("Enable Third Person Mode to configure settings.", GetTextStyle());
             }
 
-            GUILayout.Space(12);
+            GUILayout.Space(10);
 
-            // Discord Link Button (Discord Blurple Color)
-            GUI.backgroundColor = new Color(0.35f, 0.45f, 0.9f); // Discord Blurple
-            if (GUILayout.Button("<b>JOIN DISCORD SERVER</b>", GetButtonStyle(), GUILayout.Height(30)))
+            // Discord Link Button
+            GUI.backgroundColor = new Color(0.35f, 0.45f, 0.9f);
+            if (GUILayout.Button("<b>JOIN DISCORD SERVER</b>", GetButtonStyle(), GUILayout.Height(28)))
             {
                 Application.OpenURL("https://discord.gg/2myJxynQtX");
             }
-            GUI.backgroundColor = Color.white; // Restore
+            GUI.backgroundColor = Color.white;
 
             GUILayout.EndArea();
         }
         #endregion
+
+        // Helper to check if a renderer belongs strictly to the visual avatar or cosmetics
+        public static bool ShouldShowRenderer(Renderer r, VRRig rig)
+        {
+            if (r == null) return false;
+
+            if (r == rig.mainSkin) return true;
+
+            string name = r.name;
+
+            // Skip gaze objects, eye indicators, phantom colliders, green tracking targets, etc.
+            if (name.Contains("Phantom") || name.Contains("Collider") || name.Contains("Trigger") || 
+                name.Contains("Bounds") || name.Contains("Gaze") || name.Contains("Eye") || name.Contains("Target"))
+                return false;
+
+            // Render visual mesh parts ending in _new (e.g., body_new, hand.L_new, etc.)
+            if (name.EndsWith("_new")) return true;
+
+            // Render cosmetics and accessories attached to rig anchors
+            Transform p = r.transform;
+            while (p != null && p != rig.transform)
+            {
+                string pName = p.name;
+                if (pName.Contains("Cosmetics") || pName.Contains("Friendship") || 
+                    pName.Contains("friendship") || pName.Contains("Anchor") || pName.Contains("body_new"))
+                    return true;
+                p = p.parent;
+            }
+
+            return false;
+        }
     }
 
     [HarmonyPatch(typeof(VRRig), "PostTick")]
@@ -368,20 +477,15 @@ namespace ThirdMonke
                         }
                     }
 
+                    // Enable only visual mesh renderers, filtering out volumetric eyes, gaze targets, and debug green lines
                     var renderers = __instance.GetComponentsInChildren<Renderer>(true);
                     foreach (var r in renderers)
                     {
-                        if (r == null) continue;
-
-                        string name = r.name;
-                        if (name.Contains("Phantom") || name.Contains("Collider") || name.Contains("Trigger") || name.Contains("Bounds"))
-                            continue;
-
-                        if (r.GetComponent<Collider>() != null)
-                            continue;
-
-                        r.enabled = true;
-                        r.gameObject.layer = 0;
+                        if (Plugin.ShouldShowRenderer(r, __instance))
+                        {
+                            r.enabled = true;
+                            r.gameObject.layer = 0; // Default layer
+                        }
                     }
                 }
             }
