@@ -29,7 +29,7 @@ namespace ThirdMonke
                 var harmony = new Harmony("com.narezany.thirdmonke");
                 harmony.PatchAll(typeof(Plugin).Assembly);
 
-                Logger.LogInfo("Third Monke loaded successfully! Refined GUI, hand indicator dots, and mesh filter active.");
+                Logger.LogInfo("Third Monke loaded successfully! Clean GUI, hand dots, and fixed culling mask physics.");
             }
             catch (Exception ex)
             {
@@ -150,7 +150,7 @@ namespace ThirdMonke
                             var col = leftDot.GetComponent<Collider>();
                             if (col != null) Destroy(col);
                             leftDot.GetComponent<Renderer>().material = GetHandDotMaterial();
-                            leftDot.transform.localScale = new Vector3(0.06f, 0.06f, 0.06f); // Small distinct dots
+                            leftDot.transform.localScale = new Vector3(0.06f, 0.06f, 0.06f);
                             GameObject.DontDestroyOnLoad(leftDot);
                         }
                         if (rightDot == null)
@@ -186,7 +186,6 @@ namespace ThirdMonke
         {
             if (handDotMat == null)
             {
-                // GUI/Text Shader is built-in and naturally draws geometry on top of everything (ZTest Always)
                 Shader shader = Shader.Find("GUI/Text Shader");
                 if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
                 
@@ -198,6 +197,7 @@ namespace ThirdMonke
 
         private Vector3 originalCamPos;
         private Quaternion originalCamRot;
+        private int originalCullingMask;
         private bool hasOriginalPos = false;
 
         private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
@@ -213,7 +213,11 @@ namespace ThirdMonke
                 {
                     originalCamPos = camera.transform.position;
                     originalCamRot = camera.transform.rotation;
+                    originalCullingMask = camera.cullingMask;
                     hasOriginalPos = true;
+
+                    // Set camera culling mask to render all layers (including player layers) during rendering pass
+                    camera.cullingMask = -1;
 
                     Vector3 headPos = originalCamPos;
                     Quaternion headRot = originalCamRot;
@@ -283,6 +287,7 @@ namespace ThirdMonke
                 {
                     camera.transform.position = originalCamPos;
                     camera.transform.rotation = originalCamRot;
+                    camera.cullingMask = originalCullingMask;
                     hasOriginalPos = false;
                 }
             }
@@ -369,7 +374,7 @@ namespace ThirdMonke
         private void OnGUI()
         {
             int winWidth = 320;
-            int winHeight = 245; // Slightly taller for the new checkbox
+            int winHeight = 245;
             Rect winRect = new Rect(20, Screen.height - winHeight - 20, winWidth, winHeight);
 
             GUI.Box(winRect, "", GetWindowStyle());
@@ -473,18 +478,18 @@ namespace ThirdMonke
                         foreach (var hr in headRends)
                         {
                             hr.enabled = true;
-                            hr.gameObject.layer = 0;
+                            // DO NOT change layer anymore, camera cullingMask handling resolves rendering safely
                         }
                     }
 
-                    // Enable only visual mesh renderers, filtering out volumetric eyes, gaze targets, and debug green lines
+                    // Enable only visual mesh renderers, WITHOUT changing their physics layer
                     var renderers = __instance.GetComponentsInChildren<Renderer>(true);
                     foreach (var r in renderers)
                     {
                         if (Plugin.ShouldShowRenderer(r, __instance))
                         {
                             r.enabled = true;
-                            r.gameObject.layer = 0; // Default layer
+                            // DO NOT change layer anymore, camera cullingMask handling resolves rendering safely
                         }
                     }
                 }
