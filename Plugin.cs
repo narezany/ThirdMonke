@@ -162,20 +162,44 @@ namespace ThirdMonke
                         targetRot = Quaternion.LookRotation(headPos - targetPos, headRot * Vector3.up);
                     }
 
-                    // Anti-Clip Collision Detection (SphereCast/Raycast from head to target position)
+                    // Anti-Clip Collision Detection (RaycastAll to ignore player's own visual body and cosmetics)
                     Vector3 rayDir = targetPos - headPos;
                     float dist = rayDir.magnitude;
                     if (dist > 0.05f)
                     {
-                        // Ignore player layers (8, 9) and triggers (18, 20)
                         int layerMask = ~((1 << 8) | (1 << 9) | (1 << 18) | (1 << 20));
-                        RaycastHit hit;
-                        if (Physics.Raycast(headPos, rayDir.normalized, out hit, dist, layerMask))
+                        RaycastHit[] hits = Physics.RaycastAll(headPos, rayDir.normalized, dist, layerMask);
+                        
+                        RaycastHit closestObstacle = default;
+                        float closestDist = float.MaxValue;
+                        bool hitObstacle = false;
+
+                        foreach (var hit in hits)
                         {
-                            // Place the camera 0.15 meters in front of the collision point
-                            targetPos = hit.point - rayDir.normalized * 0.15f;
+                            // Skip player's own root transform and rig visual components (otherwise camera snaps inside head)
+                            if (hit.transform.IsChildOf(tagger.transform))
+                                continue;
+
+                            if (tagger.offlineVRRig != null && hit.transform.IsChildOf(tagger.offlineVRRig.transform))
+                                continue;
+
+                            // Skip triggers
+                            if (hit.collider.isTrigger)
+                                continue;
+
+                            if (hit.distance < closestDist)
+                            {
+                                closestDist = hit.distance;
+                                closestObstacle = hit;
+                                hitObstacle = true;
+                            }
+                        }
+
+                        if (hitObstacle)
+                        {
+                            // Position camera 0.15m in front of the hit point
+                            targetPos = closestObstacle.point - rayDir.normalized * 0.15f;
                             
-                            // Re-calculate look rotation in Front mode based on corrected position
                             if (CameraSideFront)
                             {
                                 targetRot = Quaternion.LookRotation(headPos - targetPos, headRot * Vector3.up);
